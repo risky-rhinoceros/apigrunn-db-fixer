@@ -1,0 +1,30 @@
+# Not a package — fix_cache.py is a standalone script that carries its own
+# dependency metadata in a PEP 723 header. This file exists only so the tests
+# have an environment: `uv run pytest`.
+#
+# The apigrunn pin below must be kept in step with the one in fix_cache.py.
+# That header is what users actually run; this is for development.
+
+[project]
+name = "apigrunn-db-fixer"
+version = "0.1.0"
+description = "Convert an apigrunn cache from schema version 2 to version 3"
+readme = "README.md"
+requires-python = ">=3.11"
+
+[tool.uv]
+package = false
+
+[tool.uv.sources]
+apigrunn = { git = "https://github.com/evoso-software/apigrunn", tag = "v0.2.0" }
+
+[dependency-groups]
+dev = [
+    "apigrunn",
+    "pytest>=8.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# fix_cache.py sits at the repo root rather than in a package.
+pythonpath = ["."]
