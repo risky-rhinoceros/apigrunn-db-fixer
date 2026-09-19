@@ -1,8 +1,10 @@
 """Tests for the version 2 -> version 3 conversion.
 
-Every test builds its own version 2 database with plain SQLite and markup
-shaped like a track page, so the suite needs neither the network nor a captured
-copy of aigrunn.org.
+The converted file is opened with the real ``apigrunn.Cache``, which is the
+assertion that matters: the script writes its own version 3 tables now, and
+what makes them correct is that the library accepts and reads them. apigrunn is
+a development dependency only — the script itself imports nothing — so this
+module skips wholesale when it is not installed.
 """
 
 from __future__ import annotations
@@ -11,66 +13,14 @@ import sqlite3
 from pathlib import Path
 
 import pytest
-from apigrunn import Cache
+
+from conftest import FETCHED_AT, card_html, page_html, stored_version, write_v2
 
 import fix_cache
 
-V2_SCHEMA = """
-CREATE TABLE schema_version (version INTEGER NOT NULL);
+pytest.importorskip("apigrunn", reason="the oracle for a converted cache")
 
-CREATE TABLE pages (
-    track         TEXT PRIMARY KEY,
-    url           TEXT NOT NULL,
-    html          TEXT NOT NULL,
-    etag          TEXT,
-    last_modified TEXT,
-    fetched_at    TEXT NOT NULL
-);
-"""
-
-FETCHED_AT = "2026-09-17T08:40:31+00:00"
-
-
-def card_html(video_id: str, title: str, speaker: str = "A Speaker") -> str:
-    return (
-        f'<a href="https://www.youtube.com/watch?v={video_id}" class="talk-card" '
-        f'data-title="{title}" data-speaker="{speaker}" data-desc="About {title}.">'
-        f'<div class="talk-thumb"><img src="https://img.youtube.com/vi/{video_id}/hq.jpg"/></div>'
-        f"</a>"
-    )
-
-
-def page_html(year: int, cards: str) -> str:
-    return (
-        '<html><body><div class="talks-year-group">'
-        f'<span class="talks-year-badge y{year}">{year}</span>'
-        f'<div class="talks-lane">{cards}</div>'
-        "</div></body></html>"
-    )
-
-
-def write_v2(path: Path, pages: dict[str, str], *, version: int = 2) -> None:
-    """Create a version 2 cache holding ``{track: html}``."""
-    conn = sqlite3.connect(path)
-    with conn:
-        conn.executescript(V2_SCHEMA)
-        conn.execute("INSERT INTO schema_version (version) VALUES (?)", (version,))
-        conn.executemany(
-            "INSERT INTO pages (track, url, html, etag, last_modified, fetched_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)",
-            [
-                (
-                    track,
-                    f"https://www.aigrunn.org/{track}",
-                    html,
-                    f'W/"{track}-etag"',
-                    "Mon, 14 Sep 2026 08:01:00 GMT",
-                    FETCHED_AT,
-                )
-                for track, html in pages.items()
-            ],
-        )
-    conn.close()
+from apigrunn import Cache  # noqa: E402  (only importable once skipped above)
 
 
 @pytest.fixture
@@ -86,14 +36,6 @@ def v2_db(tmp_path: Path) -> Path:
         },
     )
     return path
-
-
-def stored_version(path: Path) -> int | None:
-    conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-    try:
-        return fix_cache._stored_version(conn)
-    finally:
-        conn.close()
 
 
 def test_converts_a_v2_cache(v2_db: Path, capsys: pytest.CaptureFixture[str]) -> None:

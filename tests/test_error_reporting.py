@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 import fix_cache
-from test_fix_cache import card_html, page_html, write_v2
+from conftest import card_html, page_html, write_v2
 
 
 @pytest.fixture(autouse=True)
@@ -89,9 +89,11 @@ def test_the_environment_opts_in(
     assert len(sent) == 1
 
 
-def test_a_successful_run_reports_nothing(v2_db_like: Path, sent: list[dict]) -> None:
-    assert fix_cache.run([str(v2_db_like), "--report-errors"]) == fix_cache.EXIT_OK
-    assert sent == []
+def test_a_successful_run_sends_a_summary(v2_db_like: Path, sent: list[dict]) -> None:
+    assert fix_cache.run([str(v2_db_like)]) == fix_cache.EXIT_OK
+    assert len(sent) == 1
+    assert sent[0]["result"] == "ok"
+    assert sent[0]["run"]["cards"] == 1
 
 
 def test_the_payload_describes_the_error(crashing_db: Path, sent: list[dict]) -> None:
@@ -116,7 +118,7 @@ def test_the_payload_describes_the_run_and_the_environment(
     assert report["tool"] == fix_cache.TOOL_NAME
     assert report["reported_at"].endswith("Z")
     assert report["environment"]["python"] == platform.python_version()
-    assert report["environment"]["apigrunn_schema_version"] == fix_cache.SCHEMA_VERSION
+    assert report["environment"]["target_schema"] == fix_cache.TARGET_VERSION
     assert report["run"] == {
         "stage": "build_v3",
         "dry_run": False,
@@ -138,6 +140,24 @@ def test_local_paths_are_scrubbed(
     assert str(crashing_db) not in serialised
     assert str(tmp_path) not in serialised
     assert str(Path.home()) not in serialised
+
+
+def test_apigrunn_environment_variables_are_scrubbed(
+    crashing_db: Path, tmp_path: Path, sent: list[dict], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("APIGRUNN_CACHE", str(tmp_path / "apigrunn.db"))
+    crash(crashing_db, "--report-errors")
+
+    variables = sent[0]["environment"]["variables"]
+    assert "APIGRUNN_CACHE" in variables
+    assert str(tmp_path) not in json.dumps(variables)
+    assert str(Path.home()) not in json.dumps(variables)
+
+
+def test_redaction_blanks_secret_words() -> None:
+    context = fix_cache._RunContext()
+    assert fix_cache._redact("PASSWORD", "hunter2", context) == "<redacted>"
+    assert fix_cache._redact("token", "s3cret", context) == "<redacted>"
 
 
 def test_a_failing_endpoint_does_not_mask_the_crash(

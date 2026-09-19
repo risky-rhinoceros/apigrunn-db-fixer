@@ -1,9 +1,10 @@
-# Not a package — fix_cache.py is a standalone script that carries its own
-# dependency metadata in a PEP 723 header. This file exists only so the tests
-# have an environment: `uv run pytest`.
+# Not a package — fix_cache.py is a standalone script with no dependencies at
+# all. This file exists only so the tests have an environment: `uv run pytest`.
 #
-# The apigrunn pin below must be kept in step with the one in fix_cache.py.
-# That header is what users actually run; this is for development.
+# apigrunn is here as the tests' oracle, never as something the script imports:
+# the suite holds its parser to apigrunn's output and opens every converted
+# database with the real Cache. Bump the pin when a new release lands, and let
+# the suite say whether the conversion still produces a file it accepts.
 
 [project]
 name = "apigrunn-db-fixer"
